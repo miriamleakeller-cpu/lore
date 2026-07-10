@@ -158,6 +158,11 @@ header>*{pointer-events:auto}
   position:fixed;z-index:90;pointer-events:none;transform:rotate(3deg) scale(1.05);
   box-shadow:0 24px 40px -12px rgba(0,0,0,.85);border-radius:4px;overflow:hidden;
 }
+.cover-rows,.spine-rows{position:relative}
+.drop-ind{
+  position:absolute;width:4px;border-radius:99px;background:var(--accent);
+  display:none;pointer-events:none;z-index:5;
+}
 
 /* ============ FAB ============ */
 #fab{
@@ -222,8 +227,8 @@ header>*{pointer-events:auto}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .filebtn.has{color:var(--accent);border-style:solid;border-color:var(--accent)}
-.stars-input{display:flex;gap:12px;font-size:48px;justify-content:center;padding:6px 0}
-.stars-input button{color:var(--ink-faint);transition:transform .1s;line-height:1}
+.stars-input{display:flex;gap:12px;justify-content:center;padding:6px 0}
+.stars-input button{font-size:46px;line-height:1;color:var(--ink-faint);transition:transform .1s}
 .stars-input button.on{color:var(--gold)}
 .stars-input button:active{transform:scale(1.15)}
 .stars-line{color:var(--gold);letter-spacing:2px;font-size:15px;margin-top:8px}
@@ -282,7 +287,9 @@ header>*{pointer-events:auto}
   background:linear-gradient(to bottom,#16141A 55%,transparent);
 }
 #reader.light #rtop{background:linear-gradient(to bottom,#F5EFE0 55%,transparent)}
-#r-back,#r-set{width:38px;height:38px;display:grid;place-items:center;flex:0 0 auto}
+#r-back,#r-set,#r-quote{width:38px;height:38px;display:grid;place-items:center;flex:0 0 auto}
+#r-quote.on{color:var(--accent)}
+#reader.quoting .tapzone{pointer-events:none}
 #r-title{
   flex:1;font-family:var(--disp);font-style:italic;font-weight:600;font-size:15px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
@@ -295,9 +302,8 @@ header>*{pointer-events:auto}
   position:absolute;left:0;right:0;bottom:0;height:calc(var(--safe-bot) + 16px);
   padding-bottom:var(--safe-bot);z-index:2;display:flex;align-items:center;
 }
-#rbar .track{flex:1;height:2.5px;margin:0 10px 0 20px;background:rgba(128,128,128,.22);border-radius:99px;overflow:hidden}
+#rbar .track{flex:1;height:2.5px;margin:0 20px;background:rgba(128,128,128,.22);border-radius:99px;overflow:hidden}
 #rbar .track i{display:block;height:100%;width:0%;background:var(--accent);transition:width .3s}
-#r-pct{font-size:10.5px;opacity:.55;margin-right:16px;min-width:32px;text-align:right}
 
 /* Reader settings panel (simple, solid) */
 #rset{
@@ -385,6 +391,12 @@ header>*{pointer-events:auto}
       <svg class="i" viewBox="0 0 24 24" style="width:22px;height:22px"><path d="M15 5l-7 7 7 7"/></svg>
     </button>
     <span id="r-title"></span>
+    <button id="r-quote" aria-label="Mark a quote">
+      <svg class="i" viewBox="0 0 24 24" style="width:20px;height:20px">
+        <path d="M10 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0c0 3.6-1.4 6-4 7.4"/>
+        <path d="M20 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0c0 3.6-1.4 6-4 7.4"/>
+      </svg>
+    </button>
     <button id="r-set" aria-label="Reading settings">
       <svg class="i" viewBox="0 0 24 24" style="width:20px;height:20px">
         <path d="M4 9h3.6M12.4 9H20M4 15h9.6M18.4 15H20"/>
@@ -416,7 +428,7 @@ header>*{pointer-events:auto}
   <div id="reader-view"></div>
   <div class="tapzone left"></div>
   <div class="tapzone right"></div>
-  <div id="rbar"><div class="track"><i id="rprog"></i></div><span id="r-pct">–</span></div>
+  <div id="rbar"><div class="track"><i id="rprog"></i></div></div>
   <button id="r-finish" hidden>Finish book</button>
   <button id="qpop" hidden>Save quote</button>
 </div>
@@ -724,7 +736,7 @@ function renderDone(){
   for(const b of list){
     const {slot,el,color,fontIdx}=spineEl(b,true,ctx);
     ctx.prevColor=color;ctx.prevFont=fontIdx;
-    el.addEventListener('click',()=>sheetDone(b));
+    attachPress(el,()=>sheetDoneInfo(b),()=>sheetDoneActions(b));
     rows.appendChild(slot);
   }
   host.appendChild(rows);
@@ -764,12 +776,33 @@ function persistOrder(sel){
   };
 }
 
-/* ---------- Press / long-press / drag ---------- */
+/* ---------- Press / long-press (tap vs. hold, scroll-aware) ---------- */
+function attachPress(el,onTap,onLong){
+  let t=null,long=false,moved=false,sx=0,sy=0;
+  el.addEventListener('pointerdown',e=>{
+    long=false;moved=false;sx=e.clientX;sy=e.clientY;
+    t=setTimeout(()=>{long=true;if(navigator.vibrate)navigator.vibrate(8);onLong();},420);
+  });
+  el.addEventListener('pointermove',e=>{
+    if(Math.hypot(e.clientX-sx,e.clientY-sy)>10){moved=true;clearTimeout(t);}
+  });
+  el.addEventListener('pointerup',()=>{clearTimeout(t);if(!long&&!moved)onTap();});
+  el.addEventListener('pointercancel',()=>clearTimeout(t));
+}
+
+/* ---------- Press / long-press / drag ----------
+   The dragged element is NEVER moved in the DOM while the finger is down –
+   Safari cancels the gesture when the captured node is reparented. Instead a
+   ghost follows the finger, a drop indicator marks the target position, and
+   the actual reorder happens once, on release. */
 function pressDrag(el,opts){
-  let timer=null,ghost=null,drag=false,moved=false,sx=0,sy=0;
+  let timer=null,ghost=null,indicator=null;
+  let drag=false,moved=false,preMoved=false,sx=0,sy=0;
+  let dropRef,haveDrop=false,raf=0,lastEvt=null;
   el.addEventListener('touchmove',e=>{if(drag)e.preventDefault();},{passive:false});
   el.addEventListener('pointerdown',e=>{
-    sx=e.clientX;sy=e.clientY;moved=false;drag=false;
+    sx=e.clientX;sy=e.clientY;
+    moved=false;preMoved=false;drag=false;haveDrop=false;dropRef=undefined;
     timer=setTimeout(()=>{
       drag=true;
       if(navigator.vibrate)navigator.vibrate(10);
@@ -782,43 +815,80 @@ function pressDrag(el,opts){
       ghost.style.left=(e.clientX-r.width/2)+'px';
       ghost.style.top=(e.clientY-r.height/2)+'px';
       document.body.appendChild(ghost);
+      const cont=document.querySelector(opts.containerSel);
+      if(cont){
+        indicator=document.createElement('div');
+        indicator.className='drop-ind';
+        cont.appendChild(indicator);
+      }
       try{el.setPointerCapture(e.pointerId);}catch(_){}
     },330);
   });
-  el.addEventListener('pointermove',e=>{
-    if(!drag){
-      if(Math.hypot(e.clientX-sx,e.clientY-sy)>10)clearTimeout(timer);
-      return;
-    }
-    if(Math.hypot(e.clientX-sx,e.clientY-sy)>8)moved=true;
+  function updateDrag(e){
     if(ghost){
       ghost.style.left=(e.clientX-ghost.offsetWidth/2)+'px';
       ghost.style.top=(e.clientY-ghost.offsetHeight/2)+'px';
     }
-    const els=document.elementsFromPoint(e.clientX,e.clientY);
-    const over=els.find(x=>x.matches&&x.matches(opts.itemSel)&&x!==el&&x.closest(opts.containerSel));
-    if(over){
-      const mySlot=el.parentElement,overSlot=over.parentElement,parent=overSlot.parentElement;
-      if(overSlot!==mySlot){
-        const or=overSlot.getBoundingClientRect();
-        const after=e.clientY>or.bottom?true:(e.clientY<or.top?false:e.clientX>or.left+or.width/2);
-        const ref=after?overSlot.nextSibling:overSlot;
-        /* only move if the position actually changes – prevents jitter/freeze */
-        if(ref!==mySlot&&mySlot.nextSibling!==ref)parent.insertBefore(mySlot,ref);
-      }
+    const cont=document.querySelector(opts.containerSel);
+    if(!cont||!indicator)return;
+    const mySlot=el.parentElement;
+    /* nearest slot by centre distance – works over gaps and shelf lines too */
+    let best=null,bestD=Infinity;
+    for(const s of cont.children){
+      if(s===mySlot||s===indicator)continue;
+      const r=s.getBoundingClientRect();
+      const d=Math.hypot(e.clientX-(r.left+r.width/2),e.clientY-(r.top+r.height/2));
+      if(d<bestD){bestD=d;best=s;}
     }
+    if(!best){haveDrop=false;indicator.style.display='none';return;}
+    const r=best.getBoundingClientRect();
+    const after=e.clientY>r.bottom?true:(e.clientY<r.top?false:e.clientX>r.left+r.width/2);
+    dropRef=after?best.nextSibling:best;
+    haveDrop=true;
+    if(dropRef===mySlot||mySlot.nextSibling===dropRef){
+      indicator.style.display='none';
+      return;
+    }
+    const cr=cont.getBoundingClientRect();
+    indicator.style.display='block';
+    indicator.style.height=Math.max(40,r.height-24)+'px';
+    indicator.style.top=(r.top-cr.top+12)+'px';
+    indicator.style.left=((after?r.right+1:r.left-5)-cr.left)+'px';
+    /* auto-scroll the shelf near the edges */
+    const shelf=cont.closest('.shelf');
+    if(shelf){
+      if(e.clientY<150)shelf.scrollBy(0,-9);
+      else if(e.clientY>window.innerHeight-130)shelf.scrollBy(0,9);
+    }
+  }
+  el.addEventListener('pointermove',e=>{
+    if(!drag){
+      if(Math.hypot(e.clientX-sx,e.clientY-sy)>10){preMoved=true;clearTimeout(timer);}
+      return;
+    }
+    if(Math.hypot(e.clientX-sx,e.clientY-sy)>8)moved=true;
+    lastEvt=e;
+    if(!raf)raf=requestAnimationFrame(()=>{raf=0;if(drag&&lastEvt)updateDrag(lastEvt);});
   });
   const end=e=>{
     clearTimeout(timer);
     if(!drag){
-      if(e.type==='pointerup')opts.onTap();
+      /* only a real tap opens the book – not a swipe that started on it */
+      if(e.type==='pointerup'&&!preMoved)opts.onTap();
       return;
     }
     drag=false;
     el.classList.remove('dragging');
     if(ghost){ghost.remove();ghost=null;}
-    if(moved)opts.onReorder();
-    else if(opts.onStillHold)opts.onStillHold();
+    if(indicator){indicator.remove();indicator=null;}
+    const mySlot=el.parentElement;
+    let didMove=false;
+    if(moved&&haveDrop&&dropRef!==mySlot&&mySlot.nextSibling!==dropRef){
+      mySlot.parentElement.insertBefore(mySlot,dropRef||null);
+      didMove=true;
+    }
+    if(didMove)opts.onReorder();
+    else if(!moved&&opts.onStillHold)opts.onStillHold();
   };
   el.addEventListener('pointerup',end);
   el.addEventListener('pointercancel',end);
@@ -888,8 +958,8 @@ function starsInput(hostSel,initial,onChange){
   });
 }
 
-/* Shelf: a finished book */
-function sheetDone(b){
+/* Shelf: short tap – book info */
+function sheetDoneInfo(b){
   const quotes=(b.quotes||[]).map(q=>`<div class="quote">«${esc(q.text)}»</div>`).join('');
   openSheet(`
     <h2 class="booktitle">${esc(b.title)}</h2>
@@ -897,6 +967,14 @@ function sheetDone(b){
     ${starsHtml(b.rating)}
     ${b.review?`<section><div class="label">Thoughts</div><div class="review-txt">${esc(b.review)}</div></section>`:''}
     ${quotes?`<section><div class="label">Quotes</div>${quotes}</section>`:''}
+  `);
+}
+
+/* Shelf: long press – actions */
+function sheetDoneActions(b){
+  openSheet(`
+    <h2 class="booktitle">${esc(b.title)}</h2>
+    <div class="by">${esc(b.author||'')}</div>
     <section>
       <button class="btn primary" id="rr-btn">Reread</button>
       <button class="btn" id="edit-btn">Edit</button>
@@ -1182,7 +1260,7 @@ const Reader={
   fontPct:+(localStorage.getItem('lore-font')||100),
   theme:localStorage.getItem('lore-theme')||'dark',
   rfont:localStorage.getItem('lore-rfont')||'serif',
-  pendingCfi:null,
+  pendingText:null,quoteMode:false,
 };
 
 const READER_THEMES={
@@ -1245,7 +1323,6 @@ async function openReader(b){
   $('#reader').classList.add('on');Reader.open=true;
   $('#r-title').textContent=b.title;
   $('#rprog').style.width=(b.pct?Math.round(b.pct*100):0)+'%';
-  $('#r-pct').textContent=b.pct?Math.round(b.pct*100)+' %':'–';
   $('#r-finish').hidden=true;
   applyReaderTheme();
 
@@ -1259,8 +1336,14 @@ async function openReader(b){
     const st=contents.document.createElement('style');
     st.id='lore-style';st.textContent=readerCSS();
     contents.document.head.appendChild(st);
+    setupQuote(contents);
+    if(Reader.quoteMode){
+      contents.document.body.style.webkitUserSelect='none';
+      contents.document.body.style.userSelect='none';
+    }
     /* middle third: toggle reading settings */
     contents.document.addEventListener('click',()=>{
+      if(Reader.quoteMode)return;
       hideQuotePop();
       $('#rset').classList.toggle('on');
     });
@@ -1301,13 +1384,6 @@ async function openReader(b){
     $('#r-finish').hidden=!loc.atEnd;
   });
 
-  /* quote: text selection */
-  Reader.rendition.on('selected',(cfiRange,contents)=>{
-    Reader.pendingCfi=cfiRange;
-    Reader._selContents=contents;
-    $('#qpop').hidden=false;
-  });
-
   b.lastOpened=Date.now();
   await DB.put('books',b);
   Stats.startClock();
@@ -1323,30 +1399,110 @@ function updateProgress(loc){
   if(pct!=null){
     Reader.item.pct=pct;
     $('#rprog').style.width=Math.round(pct*100)+'%';
-    $('#r-pct').textContent=Math.round(pct*100)+' %';
   }
 }
 
 function hideQuotePop(){$('#qpop').hidden=true;}
 
-$('#qpop').addEventListener('click',async()=>{
-  if(!Reader.pendingCfi||!Reader.item)return;
-  try{
-    const range=await Reader.book.getRange(Reader.pendingCfi);
-    const text=range.toString().trim();
-    if(text){
-      Reader.item.quotes=Reader.item.quotes||[];
-      Reader.item.quotes.push({text,date:Date.now()});
-      await DB.put('books',Reader.item);
-      toast('Quote saved');
+/* ---------- Quote mode ----------
+   Native long-press selection is unusable inside the paginated iframe, so:
+   tap the quote icon, then drag a finger across the text. We build the range
+   from caret positions ourselves and paint our own highlight overlay. */
+function caretFromPoint(doc,x,y){
+  if(doc.caretRangeFromPoint){
+    const r=doc.caretRangeFromPoint(x,y);
+    return r?{node:r.startContainer,off:r.startOffset}:null;
+  }
+  if(doc.caretPositionFromPoint){
+    const p=doc.caretPositionFromPoint(x,y);
+    return p?{node:p.offsetNode,off:p.offset}:null;
+  }
+  return null;
+}
+function setupQuote(contents){
+  const doc=contents.document;
+  const hlBox=doc.createElement('div');
+  hlBox.id='lore-hl';
+  hlBox.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:9999';
+  doc.body.appendChild(hlBox);
+  let anchor=null,range=null;
+  const paint=()=>{
+    hlBox.innerHTML='';
+    if(!range)return;
+    for(const r of range.getClientRects()){
+      const d=doc.createElement('div');
+      d.style.cssText=`position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;background:rgba(185,167,230,.4);border-radius:3px`;
+      hlBox.appendChild(d);
     }
-  }catch(_){toast("Couldn't read the selection");}
-  if(Reader._selContents){try{Reader._selContents.window.getSelection().removeAllRanges();}catch(_){}}
+  };
+  doc.addEventListener('pointerdown',e=>{
+    if(!Reader.quoteMode)return;
+    anchor=caretFromPoint(doc,e.clientX,e.clientY);
+    range=null;paint();hideQuotePop();
+  });
+  doc.addEventListener('pointermove',e=>{
+    if(!Reader.quoteMode||!anchor)return;
+    e.preventDefault();
+    const cur=caretFromPoint(doc,e.clientX,e.clientY);
+    if(!cur)return;
+    const r=doc.createRange();
+    try{
+      r.setStart(anchor.node,anchor.off);
+      r.setEnd(cur.node,cur.off);
+      if(r.collapsed){
+        r.setStart(cur.node,cur.off);
+        r.setEnd(anchor.node,anchor.off);
+      }
+    }catch(_){return;}
+    range=r;paint();
+  });
+  doc.addEventListener('touchmove',e=>{
+    if(Reader.quoteMode&&anchor)e.preventDefault();
+  },{passive:false});
+  doc.addEventListener('pointerup',()=>{
+    if(!Reader.quoteMode){anchor=null;return;}
+    anchor=null;
+    const text=range?range.toString().replace(/\s+/g,' ').trim():'';
+    if(text){Reader.pendingText=text;$('#qpop').hidden=false;}
+  });
+  contents._loreClearHl=()=>{anchor=null;range=null;hlBox.innerHTML='';};
+}
+function clearQuoteHl(){
+  if(!Reader.rendition)return;
+  Reader.rendition.getContents().forEach(c=>{if(c._loreClearHl)c._loreClearHl();});
+}
+function setQuoteMode(on){
+  Reader.quoteMode=on;
+  $('#r-quote').classList.toggle('on',on);
+  $('#reader').classList.toggle('quoting',on);
+  if(Reader.rendition)Reader.rendition.getContents().forEach(c=>{
+    c.document.body.style.webkitUserSelect=on?'none':'';
+    c.document.body.style.userSelect=on?'none':'';
+  });
+  if(!on)clearQuoteHl();
   hideQuotePop();
+}
+$('#r-quote').addEventListener('click',()=>{
+  $('#rset').classList.remove('on');
+  setQuoteMode(!Reader.quoteMode);
+  if(Reader.quoteMode)toast('Drag across the text to mark a quote');
+});
+
+$('#qpop').addEventListener('click',async()=>{
+  const text=Reader.pendingText;
+  if(!text||!Reader.item)return;
+  Reader.item.quotes=Reader.item.quotes||[];
+  Reader.item.quotes.push({text,date:Date.now()});
+  await DB.put('books',Reader.item);
+  Reader.pendingText=null;
+  setQuoteMode(false);
+  toast('Quote saved');
 });
 
 function closeReader(){
   Stats.stopClock();
+  setQuoteMode(false);
+  Reader.pendingText=null;
   $('#rset').classList.remove('on');
   $('#r-finish').hidden=true;
   hideQuotePop();
@@ -1512,7 +1668,7 @@ function sheetQuotes(){
   all.sort((a,b)=>a.date-b.date);
   if(!all.length){
     openSheet(`<h2>Quote archive</h2>
-      <p class="review-txt" style="margin-top:14px">No quotes yet. Select a passage in the reader and tap “Save quote”.</p>`);
+      <p class="review-txt" style="margin-top:14px">No quotes yet. Tap the quote icon in the reader and drag across a passage.</p>`);
     return;
   }
   const usage=new Map();let prev=null;
@@ -1530,7 +1686,7 @@ function sheetQuotes(){
 function sheetData(){
   openSheet(`
     <h2>Import / Export</h2>
-    <p class="review-txt" style="margin-top:12px">Your library lives in this browser. Export a backup — books, ePub files, notes, quotes and reading stats — as a ZIP, and import it again on a new phone or after clearing browser data.</p>
+    <p class="review-txt" style="margin-top:12px">Before clearing your browser data or changing phones, export your data so you can import it later and pick up right where you left off.</p>
     <section>
       <button class="btn primary" id="ex-btn">Export data</button>
       <input type="file" id="im-file" accept=".zip,application/zip" hidden>
