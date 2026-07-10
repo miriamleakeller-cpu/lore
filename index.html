@@ -142,7 +142,7 @@ header>*{pointer-events:auto}
   display:flex;flex-direction:column;align-items:center;
   box-shadow:0 10px 18px -10px rgba(0,0,0,.7);
   transition:transform .15s ease;user-select:none;-webkit-user-select:none;
-  touch-action:pan-y;
+  touch-action:manipulation;
 }
 .spine:active{transform:translateY(-4px)}
 .spine .deco{width:100%;flex:0 0 auto}
@@ -161,7 +161,7 @@ header>*{pointer-events:auto}
 
 /* ============ FAB ============ */
 #fab{
-  position:fixed;right:22px;bottom:calc(var(--safe-bot) + 24px);z-index:30;
+  position:fixed;right:22px;bottom:calc(var(--safe-bot) + 12px);z-index:30;
   width:56px;height:56px;border-radius:19px;
   background:var(--accent);color:var(--accent-ink);
   font-size:28px;font-weight:500;line-height:1;
@@ -187,7 +187,8 @@ header>*{pointer-events:auto}
   transform:translateY(105%);transition:transform .32s cubic-bezier(.32,.9,.35,1);
 }
 .sheet.on{transform:translateY(0)}
-.grip{width:38px;height:4px;border-radius:99px;background:var(--ink-faint);margin:0 auto 18px}
+.grip-zone{margin:-14px -24px 4px;padding:14px 24px 10px;touch-action:none;cursor:grab}
+.grip{width:38px;height:4px;border-radius:99px;background:var(--ink-faint);margin:0 auto}
 .sheet h2{font-family:var(--sans);font-weight:600;font-size:20px;letter-spacing:.01em}
 .sheet h2.booktitle{font-family:var(--disp);font-style:italic;font-weight:700;font-size:24px;line-height:1.15;font-variation-settings:"opsz" 40}
 .sheet .by{color:var(--ink-dim);font-size:13.5px;margin-top:5px;letter-spacing:.03em}
@@ -205,7 +206,7 @@ header>*{pointer-events:auto}
 }
 .btn:active{transform:scale(.98)}
 .btn.primary{background:var(--accent);border-color:transparent;color:var(--accent-ink);font-weight:600}
-.btn.danger{color:var(--red);border-color:rgba(217,58,74,.3)}
+.btn.danger{color:var(--red);border-color:rgba(217,58,74,.3);margin-top:24px}
 .field{margin-top:14px}
 .field label{display:block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:7px}
 .field input[type=text],.field textarea{
@@ -221,7 +222,7 @@ header>*{pointer-events:auto}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .filebtn.has{color:var(--accent);border-style:solid;border-color:var(--accent)}
-.stars-input{display:flex;gap:10px;font-size:40px;justify-content:center;padding:6px 0}
+.stars-input{display:flex;gap:12px;font-size:48px;justify-content:center;padding:6px 0}
 .stars-input button{color:var(--ink-faint);transition:transform .1s;line-height:1}
 .stars-input button.on{color:var(--gold)}
 .stars-input button:active{transform:scale(1.15)}
@@ -286,7 +287,7 @@ header>*{pointer-events:auto}
   flex:1;font-family:var(--disp);font-style:italic;font-weight:600;font-size:15px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
-#reader-view{position:absolute;inset:0;padding:calc(var(--safe-top) + 58px) 8px calc(var(--safe-bot) + 26px)}
+#reader-view{position:absolute;left:8px;right:8px;top:calc(var(--safe-top) + 58px);bottom:calc(var(--safe-bot) + 26px)}
 .tapzone{position:absolute;top:calc(var(--safe-top) + 58px);bottom:60px;width:27%;z-index:2}
 .tapzone.left{left:0}
 .tapzone.right{right:0}
@@ -309,6 +310,7 @@ header>*{pointer-events:auto}
 #rset .rrow{display:flex;gap:8px;margin-top:10px}
 #rset .rrow:first-child{margin-top:0}
 .rbtn{flex:1;height:44px;border-radius:13px;background:rgba(255,255,255,.07);border:1px solid var(--line);font-size:16px;font-weight:600;color:inherit}
+.rbtn:active,.rbtn.flash{background:var(--accent);color:var(--accent-ink);border-color:transparent}
 .theme-pill{flex:1;display:flex;background:rgba(255,255,255,.07);border:1px solid var(--line);border-radius:13px;overflow:hidden}
 .theme-pill button{flex:1;height:42px;display:grid;place-items:center;color:inherit;opacity:.6;transition:all .2s}
 .theme-pill button.on{background:var(--accent);color:var(--accent-ink);opacity:1}
@@ -317,7 +319,7 @@ header>*{pointer-events:auto}
 #r-font button[data-f=sans]{font-family:var(--sans)}
 #r-font button[data-f=dyslexic]{font-family:'OpenDyslexic',sans-serif;font-size:11.5px}
 #r-font button.on{background:var(--accent);color:var(--accent-ink);border-color:transparent}
-#reader.light #rset{background:#FFFDF8;border-color:rgba(42,36,48,.14)}
+#reader.light #rset{background:#FFFDF8;border-color:rgba(42,36,48,.14);color:#2A2430;box-shadow:0 18px 36px -14px rgba(0,0,0,.25)}
 #reader.light #rset .rbtn,
 #reader.light #rset .theme-pill,
 #reader.light #rset #r-font button{background:rgba(42,36,48,.06);border-color:rgba(42,36,48,.14)}
@@ -384,9 +386,9 @@ header>*{pointer-events:auto}
     </button>
     <span id="r-title"></span>
     <button id="r-set" aria-label="Reading settings">
-      <svg class="i" viewBox="0 0 24 24" style="width:21px;height:21px">
-        <path d="M4 7h8M18.5 7H20M4 12h2M12.5 12H20M4 17h9M19.5 17H20"/>
-        <circle cx="15.5" cy="7" r="2.2"/><circle cx="9.5" cy="12" r="2.2"/><circle cx="16.5" cy="17" r="2.2"/>
+      <svg class="i" viewBox="0 0 24 24" style="width:20px;height:20px">
+        <path d="M4 9h3.6M12.4 9H20M4 15h9.6M18.4 15H20"/>
+        <circle cx="10" cy="9" r="2.4"/><circle cx="16" cy="15" r="2.4"/>
       </svg>
     </button>
   </div>
@@ -494,7 +496,7 @@ const TRIOS=[
   ['#7C1F3E','#EFA6C6','#7C1F3E'],
   ['#3D74D8','#CFE3FF','#1D3E8C'],
   ['#B9A7E6','#3A2560','#EFDFC8'],
-  ['#157A5B','#F0B429','#3A1D0E'],
+  ['#157A5B','#EFA6C6','#0C4A38'],
   ['#9FD3E4','#0C3B5E','#9FD3E4'],
   ['#EFA6C6','#7C1F3E','#EFA6C6'],
   ['#3A2560','#B9A7E6','#3A2560'],
@@ -552,11 +554,12 @@ function coverStyle(book,ctx){
   const R=rng(seed);
   const trioOrder=shuffled(TRIOS.map((_,i)=>i),R);
   const variantOrder=shuffled(VARIANTS,R);
-  const font=FONTS[Math.floor(R()*FONTS.length)];
+  const fontOrder=shuffled(FONTS.map((_,i)=>i),R);
   const widthJitter=R();
   const trioIdx=pickBalanced(trioOrder,ctx.trioUsage,i=>ctx.bannedBgs.has(TRIOS[i][0]));
   const variant=pickBalanced(variantOrder,ctx.varUsage,v=>ctx.bannedVars.has(v));
-  return {trio:TRIOS[trioIdx],variant,font,widthJitter};
+  const fontIdx=pickBalanced(fontOrder,ctx.fontUsage,i=>i===ctx.bannedFont);
+  return {trio:TRIOS[trioIdx],variant,font:FONTS[fontIdx],fontIdx,widthJitter};
 }
 
 /* Front cover as SVG (300×450 viewBox) */
@@ -626,12 +629,14 @@ function spineEl(book,withStars,ctx){
   const R=rng(seed);
   const colorOrder=shuffled(SPINE_COLORS,R);
   const decoOrder=shuffled(DECOS,R);
+  const fontOrder=shuffled(FONTS.map((_,i)=>i),R);
   const c=pickBalanced(colorOrder,ctx.colorUsage,x=>x===ctx.prevColor);
   const deco=pickBalanced(decoOrder,ctx.decoUsage,null);
+  const fontIdx=pickBalanced(fontOrder,ctx.fontUsage,i=>i===ctx.prevFont);
+  const font=FONTS[fontIdx];
   const ink=inkFor(c);
   const w=34+Math.floor(R()*20);
   const h=176+Math.floor(R()*58);
-  const font=FONTS[Math.floor(R()*FONTS.length)];
   const slot=document.createElement('div');
   slot.className='spine-slot';
   const el=document.createElement('div');
@@ -668,7 +673,7 @@ function spineEl(book,withStars,ctx){
       ${authorHtml}
     </div>${stars}${decoBot}`;
   slot.appendChild(el);
-  return {slot,el,color:c};
+  return {slot,el,color:c,fontIdx};
 }
 
 /* ---------- Shelf rendering ---------- */
@@ -679,17 +684,18 @@ function renderNow(){
   const list=books.filter(b=>b.status==='reading').sort((a,b)=>(a.order||0)-(b.order||0));
   if(!list.length){
     host.innerHTML=`<div class="empty"><b>Nothing open yet</b>
-      Add an ePub with + or swipe right and pick a book from your TBR.</div>`;
+      Add an ePub with + or swipe right and pick a book from your TBR</div>`;
     return;
   }
   const rows=document.createElement('div');rows.className='cover-rows';rows.id='now-rows';
-  const ctx={trioUsage:new Map(),varUsage:new Map(),bannedBgs:new Set(),bannedVars:new Set()};
-  const prevBgs=[];let prevVar=null;
+  const ctx={trioUsage:new Map(),varUsage:new Map(),fontUsage:new Map(),bannedBgs:new Set(),bannedVars:new Set(),bannedFont:null};
+  const prevBgs=[];let prevVar=null,prevFont=null;
   for(const b of list){
     ctx.bannedBgs=new Set(prevBgs.slice(-2));
     ctx.bannedVars=new Set(prevVar!=null?[prevVar]:[]);
+    ctx.bannedFont=prevFont;
     const st=coverStyle(b,ctx);
-    prevBgs.push(st.trio[0]);prevVar=st.variant;
+    prevBgs.push(st.trio[0]);prevVar=st.variant;prevFont=st.fontIdx;
     const w=128+Math.floor(st.widthJitter*34);
     const slot=document.createElement('div');slot.className='cover-slot';
     const cov=document.createElement('div');cov.className='cover';cov.dataset.id=b.id;
@@ -714,10 +720,10 @@ function renderDone(){
     return;
   }
   const rows=document.createElement('div');rows.className='spine-rows';
-  const ctx={colorUsage:new Map(),decoUsage:new Map(),prevColor:null};
+  const ctx={colorUsage:new Map(),decoUsage:new Map(),fontUsage:new Map(),prevColor:null,prevFont:null};
   for(const b of list){
-    const {slot,el,color}=spineEl(b,true,ctx);
-    ctx.prevColor=color;
+    const {slot,el,color,fontIdx}=spineEl(b,true,ctx);
+    ctx.prevColor=color;ctx.prevFont=fontIdx;
     el.addEventListener('click',()=>sheetDone(b));
     rows.appendChild(slot);
   }
@@ -733,10 +739,10 @@ function renderTbr(){
     return;
   }
   const rows=document.createElement('div');rows.className='spine-rows';rows.id='tbr-rows';
-  const ctx={colorUsage:new Map(),decoUsage:new Map(),prevColor:null};
+  const ctx={colorUsage:new Map(),decoUsage:new Map(),fontUsage:new Map(),prevColor:null,prevFont:null};
   for(const b of list){
-    const {slot,el,color}=spineEl(b,false,ctx);
-    ctx.prevColor=color;
+    const {slot,el,color,fontIdx}=spineEl(b,false,ctx);
+    ctx.prevColor=color;ctx.prevFont=fontIdx;
     pressDrag(el,{
       onTap:()=>sheetTbr(b),
       onStillHold:()=>sheetTbr(b),
@@ -793,9 +799,13 @@ function pressDrag(el,opts){
     const over=els.find(x=>x.matches&&x.matches(opts.itemSel)&&x!==el&&x.closest(opts.containerSel));
     if(over){
       const mySlot=el.parentElement,overSlot=over.parentElement,parent=overSlot.parentElement;
-      const kids=[...parent.children];
-      if(kids.indexOf(mySlot)<kids.indexOf(overSlot))parent.insertBefore(mySlot,overSlot.nextSibling);
-      else parent.insertBefore(mySlot,overSlot);
+      if(overSlot!==mySlot){
+        const or=overSlot.getBoundingClientRect();
+        const after=e.clientY>or.bottom?true:(e.clientY<or.top?false:e.clientX>or.left+or.width/2);
+        const ref=after?overSlot.nextSibling:overSlot;
+        /* only move if the position actually changes – prevents jitter/freeze */
+        if(ref!==mySlot&&mySlot.nextSibling!==ref)parent.insertBefore(mySlot,ref);
+      }
     }
   });
   const end=e=>{
@@ -817,7 +827,7 @@ function pressDrag(el,opts){
 /* ---------- Sheets ---------- */
 function openSheet(html){
   $('#scrim').hidden=false;requestAnimationFrame(()=>$('#scrim').classList.add('on'));
-  const sh=$('#sheet');sh.innerHTML='<div class="grip"></div>'+html;
+  const sh=$('#sheet');sh.innerHTML='<div class="grip-zone"><div class="grip"></div></div>'+html;
   sh.scrollTop=0;
   requestAnimationFrame(()=>sh.classList.add('on'));
 }
@@ -828,6 +838,31 @@ function closeSheet(){
   setTimeout(()=>{$('#scrim').hidden=true;},280);
 }
 $('#scrim').addEventListener('click',closeSheet);
+
+/* swipe the sheet down via the grip to dismiss it */
+(function(){
+  const sh=$('#sheet');let dragging=false,sy=0,dy=0;
+  sh.addEventListener('pointerdown',e=>{
+    if(!e.target.closest('.grip-zone'))return;
+    dragging=true;sy=e.clientY;dy=0;
+    sh.style.transition='none';
+    try{sh.setPointerCapture(e.pointerId);}catch(_){}
+  });
+  sh.addEventListener('pointermove',e=>{
+    if(!dragging)return;
+    dy=Math.max(0,e.clientY-sy);
+    sh.style.transform=`translateY(${dy}px)`;
+  });
+  const up=()=>{
+    if(!dragging)return;
+    dragging=false;
+    sh.style.transition='';
+    sh.style.transform='';
+    if(dy>110)closeSheet();
+  };
+  sh.addEventListener('pointerup',up);
+  sh.addEventListener('pointercancel',up);
+})();
 
 function starsHtml(n){return n?`<div class="stars-line">${'★'.repeat(n)}${'☆'.repeat(5-n)}</div>`:'';}
 function confirmBtn(btn,fn){
@@ -1200,6 +1235,10 @@ function applyReaderTheme(){
 }
 
 async function openReader(b){
+  if(typeof ePub==='undefined'){
+    toast('Reader engine missing — is the js folder uploaded?');
+    return;
+  }
   Reader.item=b;
   const buf=await DB.get('files',b.id);
   if(!buf){sheetReadingNoFile(b);return;}
@@ -1212,7 +1251,7 @@ async function openReader(b){
 
   Reader.book=ePub(buf);
   Reader.rendition=Reader.book.renderTo('reader-view',{
-    width:'100%',height:'100%',flow:'paginated',allowScriptedContent:false,
+    width:'100%',height:'100%',flow:'paginated',spread:'none',allowScriptedContent:false,
   });
 
   /* inject own stylesheet with !important on every chapter load */
@@ -1228,7 +1267,18 @@ async function openReader(b){
   });
   Reader.rendition.themes.fontSize(Reader.fontPct+'%');
 
-  await Reader.rendition.display(b.cfi||undefined);
+  try{
+    await Reader.rendition.display(b.cfi||undefined);
+  }catch(_){
+    try{
+      b.cfi=null;
+      await Reader.rendition.display();
+    }catch(_2){
+      toast('Could not open this ePub');
+      closeReader();
+      return;
+    }
+  }
   applyReaderTheme();
 
   /* location grid for the progress bar */
@@ -1302,12 +1352,12 @@ function closeReader(){
   hideQuotePop();
   $('#reader').classList.remove('on');
   Reader.open=false;
+  const oldR=Reader.rendition,oldB=Reader.book;
+  Reader.rendition=null;Reader.book=null;Reader.item=null;
   setTimeout(()=>{
-    if(Reader.rendition){Reader.rendition.destroy();Reader.rendition=null;}
-    if(Reader.book){Reader.book.destroy();Reader.book=null;}
-    $('#reader-view').innerHTML='';
+    try{if(oldR)oldR.destroy();}catch(_){}
+    try{if(oldB)oldB.destroy();}catch(_){}
   },320);
-  Reader.item=null;
   renderNow();
 }
 
@@ -1327,12 +1377,15 @@ $('#r-finish').addEventListener('click',()=>{
   closeReader();
   if(it)showFinishModal(it);
 });
-$('#r-fminus').addEventListener('click',()=>{
+function flash(el){el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),200);}
+$('#r-fminus').addEventListener('click',e=>{
+  flash(e.currentTarget);
   Reader.fontPct=Math.max(70,Reader.fontPct-10);
   localStorage.setItem('lore-font',Reader.fontPct);
   if(Reader.rendition)Reader.rendition.themes.fontSize(Reader.fontPct+'%');
 });
-$('#r-fplus').addEventListener('click',()=>{
+$('#r-fplus').addEventListener('click',e=>{
+  flash(e.currentTarget);
   Reader.fontPct=Math.min(180,Reader.fontPct+10);
   localStorage.setItem('lore-font',Reader.fontPct);
   if(Reader.rendition)Reader.rendition.themes.fontSize(Reader.fontPct+'%');
@@ -1485,6 +1538,10 @@ function sheetData(){
     </section>
   `);
   $('#ex-btn').addEventListener('click',async()=>{
+    if(typeof JSZip==='undefined'){
+      toast('JSZip missing — is the js folder uploaded?');
+      return;
+    }
     const btn=$('#ex-btn');btn.textContent='Exporting…';
     try{
       const zip=new JSZip();

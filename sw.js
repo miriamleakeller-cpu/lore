@@ -1,6 +1,5 @@
-/* Lore – Service Worker */
-const SHELL = 'lore-shell-v1';
-const RUNTIME = 'lore-runtime-v1';
+/* Lore – Service Worker (v2) */
+const SHELL = 'lore-shell-v2';
 const CORE = [
   './',
   './index.html',
@@ -8,6 +7,14 @@ const CORE = [
   './icon-192.png',
   './icon-512.png',
   './icon-180.png',
+  './js/jszip.min.js',
+  './js/epub.min.js',
+  './fonts/Fraunces.ttf',
+  './fonts/Fraunces-Italic.ttf',
+  './fonts/SpaceGrotesk.ttf',
+  './fonts/Literata.ttf',
+  './fonts/OpenDyslexic-Regular.woff',
+  './fonts/OpenDyslexic-Bold.woff',
 ];
 
 self.addEventListener('install', e => {
@@ -17,41 +24,25 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== SHELL && k !== RUNTIME).map(k => caches.delete(k)))
+      Promise.all(keys.filter(k => k !== SHELL).map(k => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', e => {
-  const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
+  const url = new URL(e.request.url);
+  if (url.origin !== location.origin) return; // analytics etc. go straight to the network
 
-  // App-Shell: Cache first, dann Netz
-  if (url.origin === location.origin) {
-    e.respondWith(
-      caches.match(e.request).then(hit => hit ||
-        fetch(e.request).then(res => {
+  e.respondWith(
+    caches.match(e.request).then(hit => hit ||
+      fetch(e.request).then(res => {
+        if (res.ok) {
           const copy = res.clone();
           caches.open(SHELL).then(c => c.put(e.request, copy));
-          return res;
-        })
-      )
-    );
-    return;
-  }
-
-  // CDN (epub.js, JSZip) & Google Fonts: Cache first mit Runtime-Cache
-  if (/cdn\.jsdelivr\.net|fonts\.googleapis\.com|fonts\.gstatic\.com/.test(url.host)) {
-    e.respondWith(
-      caches.match(e.request).then(hit => hit ||
-        fetch(e.request).then(res => {
-          if (res.ok || res.type === 'opaque') {
-            const copy = res.clone();
-            caches.open(RUNTIME).then(c => c.put(e.request, copy));
-          }
-          return res;
-        })
-      )
-    );
-  }
+        }
+        return res;
+      })
+    )
+  );
 });
