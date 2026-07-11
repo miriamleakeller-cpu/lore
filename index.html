@@ -1614,14 +1614,30 @@ $('#r-finish').addEventListener('click',()=>{
 function flash(el){el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),200);}
 /* changing the font size reflows the whole book – remember the exact spot
    and jump back to it, so the first word on the page stays the same */
+let resizeTimer = null;
+let originalCfi = null;
+
 function setFontSize(pct){
   Reader.fontPct=pct;
   localStorage.setItem('lore-font',pct);
   if(!Reader.rendition)return;
-  const loc=Reader.rendition.currentLocation();
-  const cfi=loc&&loc.start?loc.start.cfi:null;
+
+  // Merkt sich die Position nur beim ersten Klick und friert sie ein
+  if (!originalCfi) {
+    const loc = Reader.rendition.currentLocation();
+    originalCfi = loc && loc.start ? loc.start.cfi : null;
+  }
+
   Reader.rendition.themes.fontSize(pct+'%');
-  if(cfi)setTimeout(()=>{try{Reader.rendition.display(cfi);}catch(_){}},80);
+
+  // Setzt den Timer bei jedem weiteren Klick zurück
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (originalCfi) {
+      try { Reader.rendition.display(originalCfi); } catch(_) {}
+    }
+    originalCfi = null; // Reset, wenn der Sprung erfolgreich war
+  }, 400); 
 }
 $('#r-fminus').addEventListener('click',e=>{
   flash(e.currentTarget);
