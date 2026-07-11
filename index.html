@@ -1633,45 +1633,14 @@ $('#r-finish').addEventListener('click',()=>{
 function flash(el){el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),200);}
 /* changing the font size reflows the whole book – remember the exact spot
    and jump back to it, so the first word on the page stays the same */
-let resizeTimer = null;
-let originalCfi = null;
-
 function setFontSize(pct){
   Reader.fontPct=pct;
   localStorage.setItem('lore-font',pct);
   if(!Reader.rendition)return;
-
-  const view = document.getElementById('reader-view');
-
-  // 1. Beim ersten Klick: Position merken und Text sanft ausblenden
-  if (!originalCfi) {
-    const loc = Reader.rendition.currentLocation();
-    originalCfi = loc && loc.start ? loc.start.cfi : null;
-    
-    view.style.transition = 'opacity 0.15s ease';
-    view.style.opacity = '0'; // Blendet den Text aus
-  }
-
-  // 2. Timer bei jedem weiteren Klick zurücksetzen
-  clearTimeout(resizeTimer);
-  
-  resizeTimer = setTimeout(async () => {
-    // 3. Erst wenn du nicht mehr klickst: Schriftgröße im Hintergrund anwenden
-    Reader.rendition.themes.fontSize(Reader.fontPct + '%');
-    
-    try {
-      // 4. Zur exakten Startposition springen und warten, bis das Laden fertig ist
-      if (originalCfi) {
-        await Reader.rendition.display(originalCfi);
-      }
-    } catch (_) {
-      // Fehler beim Springen ignorieren, damit der Text trotzdem wieder erscheint
-    } finally {
-      // 5. Text wieder sanft einblenden und Speicher leeren
-      view.style.opacity = '1';
-      originalCfi = null;
-    }
-  }, 350); // Wartet nach deinem letzten Klick exakt 350 Millisekunden
+  const loc=Reader.rendition.currentLocation();
+  const cfi=loc&&loc.start?loc.start.cfi:null;
+  Reader.rendition.themes.fontSize(pct+'%');
+  if(cfi)setTimeout(()=>{try{Reader.rendition.display(cfi);}catch(_){}},80);
 }
 $('#r-fminus').addEventListener('click',e=>{
   flash(e.currentTarget);
@@ -1800,7 +1769,7 @@ async function renderDashboard(){
 function sheetQuotes(){
   const all=[];
   for(const b of books)for(const q of(b.quotes||[]))all.push({text:q.text,date:q.date||0,title:b.title});
-  all.sort((a,b)=>a.date-b.date);
+  all.sort((a,b)=>b.date-a.date);
   if(!all.length){
     openSheet(`<h2>Quote archive</h2>
       <p class="review-txt" style="margin-top:14px">No quotes yet. Tap the quote icon in the reader and drag across a passage.</p>`);
