@@ -152,7 +152,11 @@ header>*{pointer-events:auto}
 }
 .spine .t{letter-spacing:.04em;line-height:1;white-space:nowrap;max-height:100%;overflow:hidden;text-overflow:ellipsis}
 .spine .a{opacity:.72;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.06em}
-.spine .stars{flex:0 0 auto;display:flex;flex-direction:column;gap:1px;padding:3px 0 8px;font-size:7.5px;line-height:1}
+.spine .stars{
+  flex:0 0 auto;display:flex;flex-direction:column;gap:1px;padding:3px 0 8px;
+  font-size:7.5px;line-height:1;color:var(--gold);
+  text-shadow:0 0 1.5px rgba(20,12,4,.65),0 1px 1px rgba(20,12,4,.35);
+}
 .spine.dragging{opacity:.25}
 .drag-ghost{
   position:fixed;z-index:90;pointer-events:none;transform:rotate(3deg) scale(1.05);
@@ -306,6 +310,7 @@ header>*{pointer-events:auto}
 #rbar .track i{display:block;height:100%;width:0%;background:var(--accent);transition:width .3s}
 
 /* Reader settings panel (simple, solid) */
+#rset-scrim{position:absolute;inset:0;z-index:5;background:transparent}
 #rset{
   position:absolute;right:12px;top:calc(var(--safe-top) + 56px);z-index:6;width:256px;
   background:var(--solid);border:1px solid var(--line);border-radius:18px;padding:14px;
@@ -404,6 +409,7 @@ header>*{pointer-events:auto}
       </svg>
     </button>
   </div>
+  <div id="rset-scrim" hidden></div>
   <div id="rset">
     <div class="rrow">
       <div class="theme-pill" id="r-theme">
@@ -687,8 +693,7 @@ function spineEl(book,withStars,ctx){
     afs=Math.max(afs,7);
     authorHtml=`<span class="a" style="font-size:${afs.toFixed(1)}px">${esc(aName)}</span>`;
   }
-  const starColor=luminance(c)>0.55?'#7A5A10':'#F0B429';
-  const stars=withStars&&book.rating?`<div class="stars" style="color:${starColor}">${'<span>★</span>'.repeat(book.rating)}</div>`:'';
+  const stars=withStars&&book.rating?`<div class="stars">${'<span>★</span>'.repeat(book.rating)}</div>`:'';
   el.innerHTML=`${decoTop}
     <div class="txt">
       <span class="t" style="font-size:${tfs.toFixed(1)}px;font-family:${font.f};font-weight:${font.w};${font.it?'font-style:italic;':''}">${esc(t)}</span>
@@ -1320,6 +1325,7 @@ function readerCSS(){
     a,a *{color:${t.link} !important;}
     img,svg{max-width:100% !important;height:auto !important;}
     ::selection{background:rgba(185,167,230,.4);}
+    #lore-hl div{background:rgba(185,167,230,.45) !important;}
   `;
 }
 function applyReaderTheme(){
@@ -1376,15 +1382,12 @@ async function openReader(b){
     st.id='lore-style';st.textContent=readerCSS();
     contents.document.head.appendChild(st);
     setupQuote(contents);
-    if(Reader.quoteMode){
-      contents.document.body.style.webkitUserSelect='none';
-      contents.document.body.style.userSelect='none';
-    }
+    if(Reader.quoteMode)quoteBodyStyle(contents.document,true);
     /* middle third: toggle reading settings */
     contents.document.addEventListener('click',()=>{
       if(Reader.quoteMode)return;
       hideQuotePop();
-      $('#rset').classList.toggle('on');
+      setRset(!$('#rset').classList.contains('on'));
     });
   });
   Reader.rendition.themes.fontSize(Reader.fontPct+'%');
@@ -1443,6 +1446,13 @@ function updateProgress(loc){
 
 function hideQuotePop(){$('#qpop').hidden=true;}
 
+/* settings panel open/close incl. the invisible tap-to-close layer */
+function setRset(on){
+  $('#rset').classList.toggle('on',on);
+  $('#rset-scrim').hidden=!on;
+}
+$('#rset-scrim').addEventListener('click',()=>setRset(false));
+
 /* ---------- Quote mode ----------
    Native long-press selection is unusable inside the paginated iframe, so:
    tap the quote icon, then drag a finger across the text. We build the range
@@ -1457,6 +1467,16 @@ function caretFromPoint(doc,x,y){
     return p?{node:p.offsetNode,off:p.offset}:null;
   }
   return null;
+}
+/* quote mode needs full control over the touch stream: no native selection,
+   no iOS callout menu, and touch-action none so pointermove never gets
+   cancelled mid-drag */
+function quoteBodyStyle(doc,on){
+  const b=doc.body;if(!b)return;
+  b.style.webkitUserSelect=on?'none':'';
+  b.style.userSelect=on?'none':'';
+  b.style.touchAction=on?'none':'';
+  b.style.webkitTouchCallout=on?'none':'';
 }
 function setupQuote(contents){
   const doc=contents.document;
@@ -1514,15 +1534,12 @@ function setQuoteMode(on){
   Reader.quoteMode=on;
   $('#r-quote').classList.toggle('on',on);
   $('#reader').classList.toggle('quoting',on);
-  if(Reader.rendition)Reader.rendition.getContents().forEach(c=>{
-    c.document.body.style.webkitUserSelect=on?'none':'';
-    c.document.body.style.userSelect=on?'none':'';
-  });
+  if(Reader.rendition)Reader.rendition.getContents().forEach(c=>quoteBodyStyle(c.document,on));
   if(!on)clearQuoteHl();
   hideQuotePop();
 }
 $('#r-quote').addEventListener('click',()=>{
-  $('#rset').classList.remove('on');
+  setRset(false);
   setQuoteMode(!Reader.quoteMode);
   if(Reader.quoteMode)toast('Drag across the text to mark a quote');
 });
@@ -1542,7 +1559,7 @@ function closeReader(){
   Stats.stopClock();
   setQuoteMode(false);
   Reader.pendingText=null;
-  $('#rset').classList.remove('on');
+  setRset(false);
   $('#r-finish').hidden=true;
   hideQuotePop();
   $('#reader').classList.remove('on');
@@ -1558,15 +1575,15 @@ function closeReader(){
 
 /* tap zones & controls */
 document.querySelector('.tapzone.left').addEventListener('click',()=>{
-  hideQuotePop();$('#rset').classList.remove('on');
+  hideQuotePop();setRset(false);
   if(Reader.rendition)Reader.rendition.prev();
 });
 document.querySelector('.tapzone.right').addEventListener('click',()=>{
-  hideQuotePop();$('#rset').classList.remove('on');
+  hideQuotePop();setRset(false);
   if(Reader.rendition)Reader.rendition.next();
 });
 $('#r-back').addEventListener('click',closeReader);
-$('#r-set').addEventListener('click',()=>$('#rset').classList.toggle('on'));
+$('#r-set').addEventListener('click',()=>setRset(!$('#rset').classList.contains('on')));
 $('#r-finish').addEventListener('click',()=>{
   const it=Reader.item;
   closeReader();
