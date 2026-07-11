@@ -294,6 +294,11 @@ header>*{pointer-events:auto}
 #r-back,#r-set,#r-quote{width:38px;height:38px;display:grid;place-items:center;flex:0 0 auto}
 #r-quote.on{color:var(--accent)}
 #reader.quoting .tapzone{pointer-events:none}
+#qlayer{
+  position:absolute;left:0;right:0;top:calc(var(--safe-top) + 58px);bottom:0;
+  z-index:3;touch-action:none;
+}
+#qlayer .hl{position:absolute;background:rgba(185,167,230,.45);border-radius:3px;pointer-events:none}
 #r-title{
   flex:1;font-family:var(--disp);font-style:italic;font-weight:600;font-size:15px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
@@ -434,6 +439,7 @@ header>*{pointer-events:auto}
   <div id="reader-view"></div>
   <div class="tapzone left"></div>
   <div class="tapzone right"></div>
+  <div id="qlayer" hidden></div>
   <div id="rbar"><div class="track"><i id="rprog"></i></div></div>
   <button id="r-finish" hidden>Finish book</button>
   <button id="qpop" hidden>Save quote</button>
@@ -1325,7 +1331,6 @@ function readerCSS(){
     a,a *{color:${t.link} !important;}
     img,svg{max-width:100% !important;height:auto !important;}
     ::selection{background:rgba(185,167,230,.4);}
-    #lore-hl div{background:rgba(185,167,230,.45) !important;}
   `;
 }
 function applyReaderTheme(){
@@ -1381,7 +1386,6 @@ async function openReader(b){
     const st=contents.document.createElement('style');
     st.id='lore-style';st.textContent=readerCSS();
     contents.document.head.appendChild(st);
-    setupQuote(contents);
     if(Reader.quoteMode)quoteBodyStyle(contents.document,true);
     /* middle third: toggle reading settings */
     contents.document.addEventListener('click',()=>{
@@ -1454,9 +1458,10 @@ function setRset(on){
 $('#rset-scrim').addEventListener('click',()=>setRset(false));
 
 /* ---------- Quote mode ----------
-   Native long-press selection is unusable inside the paginated iframe, so:
-   tap the quote icon, then drag a finger across the text. We build the range
-   from caret positions ourselves and paint our own highlight overlay. */
+   The gesture is captured on a parent overlay (#qlayer) instead of inside the
+   epub iframe, where events are unreliable on iOS. Pointer coordinates are
+   translated into the iframe, the range is built from caret positions, and
+   the highlight is painted on the overlay itself. */
 function caretFromPoint(doc,x,y){
   if(doc.caretRangeFromPoint){
     const r=doc.caretRangeFromPoint(x,y);
@@ -1468,72 +1473,87 @@ function caretFromPoint(doc,x,y){
   }
   return null;
 }
-/* quote mode needs full control over the touch stream: no native selection,
-   no iOS callout menu, and touch-action none so pointermove never gets
-   cancelled mid-drag */
 function quoteBodyStyle(doc,on){
   const b=doc.body;if(!b)return;
   b.style.webkitUserSelect=on?'none':'';
   b.style.userSelect=on?'none':'';
-  b.style.touchAction=on?'none':'';
   b.style.webkitTouchCallout=on?'none':'';
 }
-function setupQuote(contents){
-  const doc=contents.document;
-  const hlBox=doc.createElement('div');
-  hlBox.id='lore-hl';
-  hlBox.style.cssText='position:fixed;left:0;top:0;width:0;height:0;overflow:visible;pointer-events:none;z-index:9999';
-  doc.body.appendChild(hlBox);
-  let anchor=null,range=null;
-  const paint=()=>{
-    hlBox.innerHTML='';
-    if(!range)return;
-    for(const r of range.getClientRects()){
-      const d=doc.createElement('div');
-      d.style.cssText=`position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;background:rgba(185,167,230,.4);border-radius:3px`;
-      hlBox.appendChild(d);
+
+const Quote={anchor:null,doc:null,ifr:null,range:null};
+function quoteFrameAt(x,y){
+  for(const ifr of document.querySelectorAll('#reader-view iframe')){
+    const r=ifr.getBoundingClientRect();
+    if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom){
+      try{if(ifr.contentDocument)return ifr;}catch(_){}
     }
-  };
-  doc.addEventListener('pointerdown',e=>{
-    if(!Reader.quoteMode)return;
-    anchor=caretFromPoint(doc,e.clientX,e.clientY);
-    range=null;paint();hideQuotePop();
-  });
-  doc.addEventListener('pointermove',e=>{
-    if(!Reader.quoteMode||!anchor)return;
-    e.preventDefault();
-    const cur=caretFromPoint(doc,e.clientX,e.clientY);
-    if(!cur)return;
-    const r=doc.createRange();
-    try{
-      r.setStart(anchor.node,anchor.off);
-      r.setEnd(cur.node,cur.off);
-      if(r.collapsed){
-        r.setStart(cur.node,cur.off);
-        r.setEnd(anchor.node,anchor.off);
-      }
-    }catch(_){return;}
-    range=r;paint();
-  });
-  doc.addEventListener('touchmove',e=>{
-    if(Reader.quoteMode&&anchor)e.preventDefault();
-  },{passive:false});
-  doc.addEventListener('pointerup',()=>{
-    if(!Reader.quoteMode){anchor=null;return;}
-    anchor=null;
-    const text=range?range.toString().replace(/\s+/g,' ').trim():'';
-    if(text){Reader.pendingText=text;$('#qpop').hidden=false;}
-  });
-  contents._loreClearHl=()=>{anchor=null;range=null;hlBox.innerHTML='';};
+  }
+  return null;
+}
+function paintQuote(){
+  const layer=$('#qlayer');
+  layer.querySelectorAll('.hl').forEach(x=>x.remove());
+  if(!Quote.range||!Quote.ifr)return;
+  const fr=Quote.ifr.getBoundingClientRect();
+  const lr=layer.getBoundingClientRect();
+  for(const r of Quote.range.getClientRects()){
+    if(!r.width||!r.height)continue;
+    const d=document.createElement('div');
+    d.className='hl';
+    d.style.left=(fr.left+r.left-lr.left)+'px';
+    d.style.top=(fr.top+r.top-lr.top)+'px';
+    d.style.width=r.width+'px';
+    d.style.height=r.height+'px';
+    layer.appendChild(d);
+  }
 }
 function clearQuoteHl(){
-  if(!Reader.rendition)return;
-  Reader.rendition.getContents().forEach(c=>{if(c._loreClearHl)c._loreClearHl();});
+  Quote.anchor=null;Quote.doc=null;Quote.ifr=null;Quote.range=null;
+  document.querySelectorAll('#qlayer .hl').forEach(x=>x.remove());
 }
+(function(){
+  const layer=$('#qlayer');
+  layer.addEventListener('pointerdown',e=>{
+    hideQuotePop();
+    clearQuoteHl();
+    const ifr=quoteFrameAt(e.clientX,e.clientY);
+    if(!ifr)return;
+    const r=ifr.getBoundingClientRect();
+    Quote.ifr=ifr;Quote.doc=ifr.contentDocument;
+    Quote.anchor=caretFromPoint(Quote.doc,e.clientX-r.left,e.clientY-r.top);
+    try{layer.setPointerCapture(e.pointerId);}catch(_){}
+  });
+  layer.addEventListener('pointermove',e=>{
+    if(!Quote.anchor||!Quote.doc||!Quote.ifr)return;
+    const r=Quote.ifr.getBoundingClientRect();
+    const cur=caretFromPoint(Quote.doc,e.clientX-r.left,e.clientY-r.top);
+    if(!cur)return;
+    const rng=Quote.doc.createRange();
+    try{
+      rng.setStart(Quote.anchor.node,Quote.anchor.off);
+      rng.setEnd(cur.node,cur.off);
+      if(rng.collapsed){
+        rng.setStart(cur.node,cur.off);
+        rng.setEnd(Quote.anchor.node,Quote.anchor.off);
+      }
+    }catch(_){return;}
+    Quote.range=rng;
+    paintQuote();
+  });
+  const up=()=>{
+    if(!Quote.anchor)return;
+    Quote.anchor=null;
+    const text=Quote.range?Quote.range.toString().replace(/\s+/g,' ').trim():'';
+    if(text){Reader.pendingText=text;$('#qpop').hidden=false;}
+  };
+  layer.addEventListener('pointerup',up);
+  layer.addEventListener('pointercancel',up);
+})();
 function setQuoteMode(on){
   Reader.quoteMode=on;
   $('#r-quote').classList.toggle('on',on);
   $('#reader').classList.toggle('quoting',on);
+  $('#qlayer').hidden=!on;
   if(Reader.rendition)Reader.rendition.getContents().forEach(c=>quoteBodyStyle(c.document,on));
   if(!on)clearQuoteHl();
   hideQuotePop();
