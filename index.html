@@ -47,6 +47,7 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
 body{
+  position:fixed;inset:0;width:100%;overflow:hidden;
   background:var(--bg);
   color:var(--ink);
   font-family:var(--sans);
@@ -302,6 +303,16 @@ header>*{pointer-events:auto}
   z-index:3;touch-action:none;
 }
 #qlayer .hl{position:absolute;background:rgba(185,167,230,.45);border-radius:3px;pointer-events:none}
+.qnav{
+  position:absolute;bottom:calc(var(--safe-bot) + 30px);z-index:4;
+  width:42px;height:42px;border-radius:99px;
+  background:var(--solid);border:1px solid var(--line);color:var(--ink);
+  font-size:20px;line-height:1;
+  box-shadow:0 10px 20px -10px rgba(0,0,0,.5);
+}
+#q-prev{left:14px}
+#q-next{right:14px}
+#reader.light .qnav{background:#FFFDF8;border-color:rgba(42,36,48,.16);color:#2A2430}
 #r-title{
   flex:1;font-family:var(--disp);font-style:italic;font-weight:600;font-size:15px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
@@ -443,6 +454,8 @@ header>*{pointer-events:auto}
   <div class="tapzone left"></div>
   <div class="tapzone right"></div>
   <div id="qlayer" hidden></div>
+  <button id="q-prev" class="qnav" hidden>‹</button>
+  <button id="q-next" class="qnav" hidden>›</button>
   <div id="rbar"><div class="track"><i id="rprog"></i></div></div>
   <button id="r-finish" hidden>Finish book</button>
   <button id="qpop" hidden>Save quote</button>
@@ -639,7 +652,7 @@ function coverSVG(book,w,st){
     let a=String(book.author).trim();
     if(a.length>40){
       const parts=a.split(/\s+/);
-      a=parts[parts.length-1];
+      a=parts.length>1?parts[0][0]+'. '+parts[parts.length-1]:parts[0];
     }
     a=a.toUpperCase();
     let afs=Math.min(13,260/(Math.max(a.length,1)*0.62));
@@ -696,7 +709,7 @@ function spineEl(book,withStars,ctx){
     let aName=String(book.author).trim();
     if(aName.length*0.55*8>avail){
       const parts=aName.split(/\s+/);
-      aName=parts[parts.length-1];
+      aName=parts.length>1?parts[0][0]+'. '+parts[parts.length-1]:parts[0];
     }
     let afs=Math.min(9,avail/(Math.max(aName.length,1)*0.55));
     afs=Math.max(afs,7);
@@ -749,18 +762,23 @@ function renderNow(){
 
 function renderDone(){
   const host=$('#shelf-done');host.innerHTML='';
-  const list=books.filter(b=>b.status==='done').sort((a,b)=>(b.finishedAt||0)-(a.finishedAt||0));
+  const list=books.filter(b=>b.status==='done').sort((a,b)=>(a.order||0)-(b.order||0));
   if(!list.length){
     host.innerHTML=`<div class="empty"><b>Your shelf is empty</b>
       Finish a book or add books you've already read with +</div>`;
     return;
   }
-  const rows=document.createElement('div');rows.className='spine-rows';
+  const rows=document.createElement('div');rows.className='spine-rows';rows.id='done-rows';
   const ctx={colorUsage:new Map(),decoUsage:new Map(),fontUsage:new Map(),prevColor:null,prevFont:null};
   for(const b of list){
     const {slot,el,color,fontIdx}=spineEl(b,true,ctx);
     ctx.prevColor=color;ctx.prevFont=fontIdx;
-    attachPress(el,()=>sheetDoneInfo(b),()=>sheetDoneActions(b));
+    pressDrag(el,{
+      onTap:()=>sheetDoneInfo(b),
+      onStillHold:()=>sheetDoneActions(b),
+      containerSel:'#done-rows',itemSel:'.spine',
+      onReorder:persistOrder('#done-rows .spine'),
+    });
     rows.appendChild(slot);
   }
   host.appendChild(rows);
@@ -939,12 +957,22 @@ $('#scrim').addEventListener('click',closeSheet);
 /* iOS sometimes leaves the visual viewport scrolled up after the keyboard
    closes, which makes fixed elements (like the + button) float too high.
    Re-anchor once no input is focused anymore. */
+function reanchorViewport(){
+  const a=document.activeElement;
+  if(a&&a.matches('input,textarea'))return;
+  if(window.scrollY||window.scrollX||(window.visualViewport&&window.visualViewport.offsetTop>0)){
+    window.scrollTo(0,0);
+  }
+}
 document.addEventListener('focusout',()=>{
-  setTimeout(()=>{
-    const a=document.activeElement;
-    if(!a||!a.matches('input,textarea'))window.scrollTo(0,0);
-  },60);
+  setTimeout(reanchorViewport,100);
+  setTimeout(reanchorViewport,400);
+  setTimeout(reanchorViewport,900);
 });
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize',()=>setTimeout(reanchorViewport,80));
+  window.visualViewport.addEventListener('scroll',()=>setTimeout(reanchorViewport,80));
+}
 
 /* swipe the sheet down via the grip to dismiss it */
 (function(){
@@ -1249,6 +1277,7 @@ function sheetAdd(){
     };
     if(mode===0){
       b.rating=rating;b.review=($('#f-review').value||'').trim();b.finishedAt=Date.now();
+      b.order=Math.min(0,...books.filter(x=>x.status==='done').map(x=>x.order||0))-1;
     }
     if(mode===1){
       b.lastOpened=Date.now();
@@ -1284,6 +1313,7 @@ function showFinishModal(b){
   $('#m-save').addEventListener('click',async()=>{
     b.status='done';b.rating=rating;b.review=($('#m-review').value||'').trim();
     b.finishedAt=Date.now();
+    b.order=Math.min(0,...books.filter(x=>x.status==='done').map(x=>x.order||0))-1;
     await DB.put('books',b);
     renderAll();closeSheet();
     toast('On the shelf');
@@ -1320,20 +1350,33 @@ const FONT_FACES=`
 function readerCSS(){
   const t=READER_THEMES[Reader.theme];
   const fam=READER_FONTS[Reader.rfont];
+  /* the font size lives in OUR stylesheet: a px base on the body plus
+     relative sizes everywhere override stubborn publisher CSS that uses
+     fixed pixel sizes (the Sherlock problem) */
+  const px=(16*Reader.fontPct/100).toFixed(1);
   return FONT_FACES+`
     html,body{background:${t.bg} !important;color:${t.fg} !important;}
+    body{font-size:${px}px !important;}
     body *{
       color:${t.fg} !important;
       background:transparent !important;
       text-shadow:none !important;
       font-family:${fam} !important;
     }
+    p,div,li,blockquote,dd,dt,td,th,figcaption,span,a,em,i,b,strong,u,cite,q,small,big,font{
+      font-size:1em !important;
+    }
+    h1{font-size:1.55em !important}
+    h2{font-size:1.35em !important}
+    h3{font-size:1.2em !important}
+    h4,h5,h6{font-size:1.05em !important}
+    sup,sub{font-size:.75em !important}
     body,p,div,li,blockquote,h1,h2,h3,h4,h5,h6{
       line-height:1.65 !important;
       letter-spacing:0 !important;
     }
     p{margin:0 0 .9em 0 !important;text-align:left !important;}
-    a,a *{color:${t.fg} !important;text-decoration:underline !important;}
+    a,a *{color:${t.fg} !important;text-decoration:none !important;}
     img,svg,image{max-width:100% !important;height:auto !important;}
     ::selection{background:rgba(185,167,230,.4);}
   `;
@@ -1348,7 +1391,6 @@ function applyReaderTheme(){
     if(!st){st=c.document.createElement('style');st.id='lore-style';c.document.head.appendChild(st);}
     st.textContent=readerCSS();
   });
-  Reader.rendition.themes.fontSize(Reader.fontPct+'%');
 }
 
 /* even integer pixel dimensions – fractional or percentage sizes trigger the
@@ -1380,6 +1422,7 @@ async function openReader(b){
   $('#r-finish').hidden=true;
   applyReaderTheme();
 
+  Reader.ready=false;
   Reader.book=ePub(buf);
   const dims=readerDims();
   Reader.rendition=Reader.book.renderTo('reader-view',{
@@ -1399,7 +1442,6 @@ async function openReader(b){
       setRset(!$('#rset').classList.contains('on'));
     });
   });
-  Reader.rendition.themes.fontSize(Reader.fontPct+'%');
 
   try{
     await Reader.rendition.display(b.cfi||undefined);
@@ -1414,6 +1456,9 @@ async function openReader(b){
     }
   }
   applyReaderTheme();
+  /* epub.js fires spurious relocated events while it settles right after
+     display – accept events only once the dust has settled */
+  setTimeout(()=>{Reader.ready=true;},350);
 
   /* location grid for the progress bar */
   Reader.book.ready.then(()=>Reader.book.locations.generate(650)).then(()=>{
@@ -1425,7 +1470,7 @@ async function openReader(b){
 
   /* save progress on EVERY page turn (relocated) */
   Reader.rendition.on('relocated',async loc=>{
-    if(!Reader.item)return;
+    if(!Reader.item||!Reader.ready)return;
     Reader.item.cfi=loc.start.cfi;
     updateProgress(loc);
     Reader.item.lastOpened=Date.now();
@@ -1485,7 +1530,7 @@ function quoteBodyStyle(doc,on){
   b.style.webkitTouchCallout=on?'none':'';
 }
 
-const Quote={anchor:null,doc:null,ifr:null,range:null};
+const Quote={anchor:null,doc:null,ifr:null,range:null,carryText:'',extending:false};
 function quoteFrameAt(x,y){
   for(const ifr of document.querySelectorAll('#reader-view iframe')){
     const r=ifr.getBoundingClientRect();
@@ -1530,18 +1575,35 @@ function paintQuote(){
 }
 function clearQuoteHl(){
   Quote.anchor=null;Quote.doc=null;Quote.ifr=null;Quote.range=null;
+  Quote.carryText='';Quote.extending=false;
   document.querySelectorAll('#qlayer .hl').forEach(x=>x.remove());
 }
 (function(){
   const layer=$('#qlayer');
   layer.addEventListener('pointerdown',e=>{
     hideQuotePop();
-    clearQuoteHl();
     const ifr=quoteFrameAt(e.clientX,e.clientY);
     if(!ifr)return;
-    const r=ifr.getBoundingClientRect();
-    Quote.ifr=ifr;Quote.doc=ifr.contentDocument;
-    Quote.anchor=caretFromPoint(Quote.doc,e.clientX-r.left,e.clientY-r.top);
+    const doc=ifr.contentDocument;
+    if(Quote.extending&&Quote.range&&Quote.doc===doc){
+      /* continue after a page turn: keep the selection start, follow the finger */
+      Quote.anchor={node:Quote.range.startContainer,off:Quote.range.startOffset};
+      Quote.ifr=ifr;
+    }else{
+      if(Quote.extending&&(Quote.range||Quote.carryText)){
+        /* new chapter file: a Range can't span documents – carry the text over */
+        const part=Quote.range?Quote.range.toString():'';
+        Quote.carryText=((Quote.carryText?Quote.carryText+' ':'')+part).replace(/\s+/g,' ').trim();
+        Quote.range=null;
+        document.querySelectorAll('#qlayer .hl').forEach(x=>x.remove());
+      }else{
+        clearQuoteHl();
+      }
+      Quote.ifr=ifr;Quote.doc=doc;
+      const r=ifr.getBoundingClientRect();
+      Quote.anchor=caretFromPoint(doc,e.clientX-r.left,e.clientY-r.top);
+    }
+    Quote.extending=false;
     try{layer.setPointerCapture(e.pointerId);}catch(_){}
   });
   layer.addEventListener('pointermove',e=>{
@@ -1564,17 +1626,30 @@ function clearQuoteHl(){
   const up=()=>{
     if(!Quote.anchor)return;
     Quote.anchor=null;
-    const text=Quote.range?Quote.range.toString().replace(/\s+/g,' ').trim():'';
+    let text=Quote.range?Quote.range.toString().replace(/\s+/g,' ').trim():'';
+    if(Quote.carryText)text=(Quote.carryText+' '+text).trim();
     if(text){Reader.pendingText=text;$('#qpop').hidden=false;}
   };
   layer.addEventListener('pointerup',up);
   layer.addEventListener('pointercancel',up);
 })();
+/* page turning inside quote mode – the selection made so far is kept */
+function quoteTurn(dir){
+  if(!Reader.rendition)return;
+  if(Quote.range||Quote.carryText)Quote.extending=true;
+  hideQuotePop();
+  const p=dir>0?Reader.rendition.next():Reader.rendition.prev();
+  if(p&&p.then)p.then(()=>setTimeout(paintQuote,80));
+}
+$('#q-prev').addEventListener('click',()=>quoteTurn(-1));
+$('#q-next').addEventListener('click',()=>quoteTurn(1));
 function setQuoteMode(on){
   Reader.quoteMode=on;
   $('#r-quote').classList.toggle('on',on);
   $('#reader').classList.toggle('quoting',on);
   $('#qlayer').hidden=!on;
+  $('#q-prev').hidden=!on;
+  $('#q-next').hidden=!on;
   if(Reader.rendition)Reader.rendition.getContents().forEach(c=>quoteBodyStyle(c.document,on));
   if(!on)clearQuoteHl();
   hideQuotePop();
@@ -1597,6 +1672,16 @@ $('#qpop').addEventListener('click',async()=>{
 });
 
 function closeReader(){
+  /* explicitly persist the current page before tearing anything down */
+  if(Reader.rendition&&Reader.item){
+    try{
+      const loc=Reader.rendition.currentLocation();
+      if(loc&&loc.start&&loc.start.cfi){
+        Reader.item.cfi=loc.start.cfi;
+        DB.put('books',Reader.item);
+      }
+    }catch(_){}
+  }
   Stats.stopClock();
   setQuoteMode(false);
   Reader.pendingText=null;
@@ -1631,16 +1716,31 @@ $('#r-finish').addEventListener('click',()=>{
   if(it)showFinishModal(it);
 });
 function flash(el){el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),200);}
-/* changing the font size reflows the whole book – remember the exact spot
-   and jump back to it, so the first word on the page stays the same */
+/* Reflow (font size or font family) while keeping the reading position:
+   the anchor cfi is captured ONCE per adjustment burst and re-displayed
+   after a debounce – repeated taps can therefore never drift away. */
+function reflowKeepPosition(mutate){
+  if(!Reader.rendition){mutate();return;}
+  if(Reader.anchorCfi===undefined||Reader.anchorCfi===null){
+    if(Reader._reflowT==null){
+      const loc=Reader.rendition.currentLocation();
+      Reader.anchorCfi=loc&&loc.start?loc.start.cfi:null;
+    }
+  }
+  mutate();
+  clearTimeout(Reader._reflowT);
+  Reader._reflowT=setTimeout(async()=>{
+    const cfi=Reader.anchorCfi;
+    Reader.anchorCfi=undefined;
+    Reader._reflowT=null;
+    if(cfi){try{await Reader.rendition.display(cfi);}catch(_){}}
+  },180);
+}
 function setFontSize(pct){
   Reader.fontPct=pct;
   localStorage.setItem('lore-font',pct);
   if(!Reader.rendition)return;
-  const loc=Reader.rendition.currentLocation();
-  const cfi=loc&&loc.start?loc.start.cfi:null;
-  Reader.rendition.themes.fontSize(pct+'%');
-  if(cfi)setTimeout(()=>{try{Reader.rendition.display(cfi);}catch(_){}},80);
+  reflowKeepPosition(applyReaderTheme);
 }
 $('#r-fminus').addEventListener('click',e=>{
   flash(e.currentTarget);
@@ -1660,7 +1760,7 @@ $('#r-font').addEventListener('click',e=>{
   const btn=e.target.closest('button');if(!btn)return;
   Reader.rfont=btn.dataset.f;
   localStorage.setItem('lore-rfont',Reader.rfont);
-  applyReaderTheme();
+  reflowKeepPosition(applyReaderTheme);
 });
 
 /* ---------- Tracking & stats ---------- */
@@ -1866,11 +1966,14 @@ $('#pager').addEventListener('scroll',()=>{
 (async function init(){
   await DB.open();
   books=await DB.all('books');
-  /* migrate: give reading/tbr books a manual order if missing */
-  for(const st of ['reading','tbr']){
+  /* migrate: give all shelves a manual order if missing */
+  for(const st of ['reading','tbr','done']){
     const l=books.filter(b=>b.status===st);
     if(l.length&&l.some(b=>b.order==null)){
-      l.sort((a,b)=>st==='reading'?(b.lastOpened||0)-(a.lastOpened||0):(a.order||0)-(b.order||0));
+      l.sort((a,b)=>
+        st==='reading'?(b.lastOpened||0)-(a.lastOpened||0):
+        st==='done'?(b.finishedAt||0)-(a.finishedAt||0):
+        (a.order||0)-(b.order||0));
       for(let i=0;i<l.length;i++){l[i].order=i;await DB.put('books',l[i]);}
     }
   }
