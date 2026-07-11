@@ -1498,8 +1498,24 @@ function paintQuote(){
   if(!Quote.range||!Quote.ifr)return;
   const fr=Quote.ifr.getBoundingClientRect();
   const lr=layer.getBoundingClientRect();
-  for(const r of Quote.range.getClientRects()){
-    if(!r.width||!r.height)continue;
+  
+  // Hole alle Rechtecke und sortiere komplett leere aus
+  const rawRects = Array.from(Quote.range.getClientRects()).filter(r => r.width > 0 && r.height > 0);
+  const validRects = [];
+
+  for (const r of rawRects) {
+    // Verhindert das "Ganze Block"-Problem: Prüft, ob dieses Rechteck ein anderes komplett umschließt
+    const isParentBlock = rawRects.some(o => o !== r && r.left <= o.left && r.top <= o.top && r.right >= o.right && r.bottom >= o.bottom && (r.width > o.width || r.height > o.height));
+    
+    // Verhindert identische Doppel-Markierungen von Zeilen
+    const isDuplicate = validRects.some(o => Math.abs(r.top - o.top) < 1 && Math.abs(r.left - o.left) < 1 && Math.abs(r.width - o.width) < 1 && Math.abs(r.height - o.height) < 1);
+
+    if (!isParentBlock && !isDuplicate) {
+      validRects.push(r);
+    }
+  }
+
+  for(const r of validRects){
     const d=document.createElement('div');
     d.className='hl';
     d.style.left=(fr.left+r.left-lr.left)+'px';
@@ -1622,22 +1638,37 @@ function setFontSize(pct){
   localStorage.setItem('lore-font',pct);
   if(!Reader.rendition)return;
 
-  // Merkt sich die Position nur beim ersten Klick und friert sie ein
+  const view = document.getElementById('reader-view');
+
+  // 1. Beim ersten Klick: Position merken und Text sanft ausblenden
   if (!originalCfi) {
     const loc = Reader.rendition.currentLocation();
     originalCfi = loc && loc.start ? loc.start.cfi : null;
+    
+    view.style.transition = 'opacity 0.15s ease';
+    view.style.opacity = '0'; // Blendet den Text aus
   }
 
-  Reader.rendition.themes.fontSize(pct+'%');
-
-  // Setzt den Timer bei jedem weiteren Klick zurück
+  // 2. Timer bei jedem weiteren Klick zurücksetzen
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => {
-    if (originalCfi) {
-      try { Reader.rendition.display(originalCfi); } catch(_) {}
+  
+  resizeTimer = setTimeout(async () => {
+    // 3. Erst wenn du nicht mehr klickst: Schriftgröße im Hintergrund anwenden
+    Reader.rendition.themes.fontSize(Reader.fontPct + '%');
+    
+    try {
+      // 4. Zur exakten Startposition springen und warten, bis das Laden fertig ist
+      if (originalCfi) {
+        await Reader.rendition.display(originalCfi);
+      }
+    } catch (_) {
+      // Fehler beim Springen ignorieren, damit der Text trotzdem wieder erscheint
+    } finally {
+      // 5. Text wieder sanft einblenden und Speicher leeren
+      view.style.opacity = '1';
+      originalCfi = null;
     }
-    originalCfi = null; // Reset, wenn der Sprung erfolgreich war
-  }, 400); 
+  }, 350); // Wartet nach deinem letzten Klick exakt 350 Millisekunden
 }
 $('#r-fminus').addEventListener('click',e=>{
   flash(e.currentTarget);
