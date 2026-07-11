@@ -1319,17 +1319,19 @@ function readerCSS(){
   const fam=READER_FONTS[Reader.rfont];
   return FONT_FACES+`
     html,body{background:${t.bg} !important;color:${t.fg} !important;}
-    body,p,div,span,li,blockquote,h1,h2,h3,h4,h5,h6,td,th,dd,dt,figcaption{
+    body *{
       color:${t.fg} !important;
       background:transparent !important;
+      text-shadow:none !important;
       font-family:${fam} !important;
+    }
+    body,p,div,li,blockquote,h1,h2,h3,h4,h5,h6{
       line-height:1.65 !important;
       letter-spacing:0 !important;
-      text-shadow:none !important;
     }
     p{margin:0 0 .9em 0 !important;text-align:left !important;}
-    a,a *{color:${t.link} !important;}
-    img,svg{max-width:100% !important;height:auto !important;}
+    a,a *{color:${t.fg} !important;text-decoration:underline !important;}
+    img,svg,image{max-width:100% !important;height:auto !important;}
     ::selection{background:rgba(185,167,230,.4);}
   `;
 }
@@ -1610,17 +1612,24 @@ $('#r-finish').addEventListener('click',()=>{
   if(it)showFinishModal(it);
 });
 function flash(el){el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),200);}
+/* changing the font size reflows the whole book – remember the exact spot
+   and jump back to it, so the first word on the page stays the same */
+function setFontSize(pct){
+  Reader.fontPct=pct;
+  localStorage.setItem('lore-font',pct);
+  if(!Reader.rendition)return;
+  const loc=Reader.rendition.currentLocation();
+  const cfi=loc&&loc.start?loc.start.cfi:null;
+  Reader.rendition.themes.fontSize(pct+'%');
+  if(cfi)setTimeout(()=>{try{Reader.rendition.display(cfi);}catch(_){}},80);
+}
 $('#r-fminus').addEventListener('click',e=>{
   flash(e.currentTarget);
-  Reader.fontPct=Math.max(70,Reader.fontPct-10);
-  localStorage.setItem('lore-font',Reader.fontPct);
-  if(Reader.rendition)Reader.rendition.themes.fontSize(Reader.fontPct+'%');
+  setFontSize(Math.max(70,Reader.fontPct-10));
 });
 $('#r-fplus').addEventListener('click',e=>{
   flash(e.currentTarget);
-  Reader.fontPct=Math.min(180,Reader.fontPct+10);
-  localStorage.setItem('lore-font',Reader.fontPct);
-  if(Reader.rendition)Reader.rendition.themes.fontSize(Reader.fontPct+'%');
+  setFontSize(Math.min(180,Reader.fontPct+10));
 });
 $('#r-theme').addEventListener('click',e=>{
   const btn=e.target.closest('button');if(!btn)return;
@@ -1741,7 +1750,7 @@ async function renderDashboard(){
 function sheetQuotes(){
   const all=[];
   for(const b of books)for(const q of(b.quotes||[]))all.push({text:q.text,date:q.date||0,title:b.title});
-  all.sort((a,b)=>a.date-b.date);
+  all.sort((a,b)=>b.date-a.date);
   if(!all.length){
     openSheet(`<h2>Quote archive</h2>
       <p class="review-txt" style="margin-top:14px">No quotes yet. Tap the quote icon in the reader and drag across a passage.</p>`);
