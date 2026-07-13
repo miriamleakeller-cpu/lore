@@ -318,6 +318,10 @@ header>*{pointer-events:auto}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 #reader-view{position:absolute;left:8px;right:8px;top:calc(var(--safe-top) + 58px);bottom:calc(var(--safe-bot) + 26px)}
+/* epub.js pages by scrolling its container horizontally – hide the scrollbar
+   some ePubs trigger (it shows up as a small dark bar near the progress bar) */
+#reader-view *{scrollbar-width:none!important;-ms-overflow-style:none!important}
+#reader-view *::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
 .tapzone{position:absolute;top:calc(var(--safe-top) + 58px);bottom:60px;width:27%;z-index:2}
 .tapzone.left{left:0}
 .tapzone.right{right:0}
@@ -1380,6 +1384,8 @@ function readerCSS(){
     p{margin:0 0 .9em 0 !important;text-align:left !important;}
     a,a *{color:${t.fg} !important;text-decoration:none !important;}
     img,svg,image{max-width:100% !important;height:auto !important;}
+    ::-webkit-scrollbar{display:none !important;width:0 !important;height:0 !important;}
+    html,body{scrollbar-width:none !important;}
     ::selection{background:rgba(185,167,230,.4);}
   `;
 }
