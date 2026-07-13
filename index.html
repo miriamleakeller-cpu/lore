@@ -1009,6 +1009,7 @@ function confirmBtn(btn,fn){
 }
 async function deleteBook(b){
   await DB.del('books',b.id);await DB.del('files',b.id).catch(()=>{});
+  await DB.del('files','loc:'+b.id).catch(()=>{});
   books=books.filter(x=>x.id!==b.id);
   renderAll();closeSheet();toast('Deleted');
 }
@@ -1131,6 +1132,7 @@ function sheetEditMeta(b){
     b.author=$('#e-author').value.trim();
     if(fileBuf){
       await DB.put('files',fileBuf,b.id);
+      await DB.del('files','loc:'+b.id).catch(()=>{});
       b.hasFile=true;b.cfi=null;b.pct=null;
     }
     await DB.put('books',b);
@@ -1363,7 +1365,7 @@ function readerCSS(){
       text-shadow:none !important;
       font-family:${fam} !important;
     }
-    p,div,li,blockquote,dd,dt,td,th,figcaption,span,a,em,i,b,strong,u,cite,q,small,big,font{
+    p,li,blockquote,dd,dt,td,th,figcaption,span,a,em,i,b,strong,u,cite,q,small,big,font{
       font-size:1em !important;
     }
     h1{font-size:1.55em !important}
@@ -1460,13 +1462,25 @@ async function openReader(b){
      display – accept events only once the dust has settled */
   setTimeout(()=>{Reader.ready=true;},350);
 
-  /* location grid for the progress bar */
-  Reader.book.ready.then(()=>Reader.book.locations.generate(650)).then(()=>{
-    if(Reader.item&&Reader.rendition){
-      const loc=Reader.rendition.currentLocation();
-      if(loc&&loc.start)updateProgress(loc);
-    }
-  }).catch(()=>{});
+  /* location grid for the progress bar – cached per book, so the bar is
+     correct immediately instead of only after a slow regeneration */
+  (async()=>{
+    try{
+      const id=b.id;
+      await Reader.book.ready;
+      const cached=await DB.get('files','loc:'+id).catch(()=>null);
+      if(cached){
+        Reader.book.locations.load(cached);
+      }else{
+        await Reader.book.locations.generate(650);
+        await DB.put('files',Reader.book.locations.save(),'loc:'+id);
+      }
+      if(Reader.item&&Reader.item.id===id&&Reader.rendition){
+        const loc=Reader.rendition.currentLocation();
+        if(loc&&loc.start)updateProgress(loc);
+      }
+    }catch(_){}
+  })();
 
   /* save progress on EVERY page turn (relocated) */
   Reader.rendition.on('relocated',async loc=>{
@@ -1488,10 +1502,11 @@ async function openReader(b){
 function updateProgress(loc){
   let pct=null;
   try{
-    if(Reader.book.locations&&Reader.book.locations.length()>0)
+    if(Reader.book&&Reader.book.locations&&Reader.book.locations.length()>0)
       pct=Reader.book.locations.percentageFromCfi(loc.start.cfi);
   }catch(_){}
-  if(pct==null&&loc.start.percentage!=null)pct=loc.start.percentage;
+  /* NO section-relative fallback: it made the bar (and the stored progress)
+     jump backwards while the location grid was still being computed */
   if(pct!=null){
     Reader.item.pct=pct;
     $('#rprog').style.width=Math.round(pct*100)+'%';
@@ -1810,7 +1825,21 @@ const Stats={
     return n;
   },
 };
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')Stats.flush();});
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState!=='hidden')return;
+  Stats.flush();
+  /* the user may leave via the home gesture instead of the back arrow –
+     persist the current page here as well */
+  if(Reader.open&&Reader.rendition&&Reader.item){
+    try{
+      const loc=Reader.rendition.currentLocation();
+      if(loc&&loc.start&&loc.start.cfi){
+        Reader.item.cfi=loc.start.cfi;
+        DB.put('books',Reader.item);
+      }
+    }catch(_){}
+  }
+});
 window.addEventListener('pagehide',()=>Stats.flush());
 
 /* ---------- App menu ---------- */
